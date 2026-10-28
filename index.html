@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SemSort</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f5f9;--sf:#fff;--tx:#161a2b;--mu:#636a80;--ln:#dde0ea;--ac:#3b3bd6;--acs:#e6e7fa;--ok:#1f8a5b;--wn:#b97a00;--bd:#d6336c;--bds:#fde8ef;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10111c;--sf:#1a1c2c;--tx:#eceefa;--mu:#9aa1ba;--ln:#2f3350;--ac:#8c8cff;--acs:#25274a;--ok:#4fd18f;--wn:#f0b429;--bd:#ff6b9a;--bds:#3a1a29;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10111c;--sf:#1a1c2c;--tx:#eceefa;--mu:#9aa1ba;--ln:#2f3350;--ac:#8c8cff;--acs:#25274a;--ok:#4fd18f;--wn:#f0b429;--bd:#ff6b9a;--bds:#3a1a29;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 'DM Sans',system-ui,sans-serif}
+h1,h2,h3{font-family:'Bricolage Grotesque',system-ui,sans-serif;margin:0;line-height:1.15}
+h1{font-size:28px}h2{font-size:19px;margin-bottom:8px}h3{font-size:16px}
+.wrap{max-width:720px;margin:0 auto;padding:16px}
+.sub{color:var(--mu);margin:4px 0 0}
+nav{display:flex;gap:4px;background:var(--acs);padding:4px;border-radius:12px;margin:14px 0}
+nav button{flex:1;border:0;background:none;padding:9px 2px;border-radius:9px;font:inherit;font-weight:500;color:var(--mu);cursor:pointer}
+nav button.on{background:var(--sf);color:var(--ac)}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:14px;margin:12px 0}
+.card.bad{border-color:var(--bd);background:var(--bds)}
+.mu{color:var(--mu);font-size:13px}
+.hm{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:6px 0 14px}
+.hm div{border-radius:8px;text-align:center;padding:4px 0;font-size:12px;line-height:1.25;border:1px solid var(--ln)}
+.hm b{font-size:14px}
+input,select,button.go{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--ln);border-radius:10px;padding:9px 10px;box-sizing:border-box}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.row .full{grid-column:1/-1}
+.row input,.row select{width:100%}
+button.go{background:var(--ac);color:#fff;border-color:var(--ac);font-weight:700;cursor:pointer}
+button.alt{background:none;color:var(--ac);border-color:var(--ln)}
+.t{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--ln)}
+.t:first-child{border-top:0}
+.t .m{flex:1;min-width:0}.t.dn .m{opacity:.5;text-decoration:line-through}
+.tag{font-size:12px;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--acs);color:var(--ac)}
+.tag.High{background:var(--bds);color:var(--bd)}.tag.Medium{color:var(--wn)}
+.x{border:0;background:none;color:var(--mu);font-size:18px;cursor:pointer}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal .w{font-size:12px;color:var(--mu);text-align:center}
+.day{min-height:62px;border:1px solid var(--ln);border-radius:8px;padding:2px;font-size:11px;overflow:hidden}
+.day.hot{border-color:var(--bd);background:var(--bds)}.day.now{outline:2px solid var(--ac)}
+.day b{display:block;font-size:12px}
+.ch{display:block;color:#fff;border-radius:4px;padding:0 3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px}
+.mon{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SemSort</h1>
+  <p class="sub">Sort your semester around real workload, not just due dates.</p><p class="mu" id="st"></p>
+  <nav>
+    <button data-t="home" onclick="go('home')">Overview</button>
+    <button data-t="tasks" onclick="go('tasks')">Tasks</button>
+    <button data-t="cal" onclick="go('cal')">Calendar</button>
+    <button data-t="plan" onclick="go('plan')">Schedule</button>
+    <button data-t="cls" onclick="go('cls')">Class</button>
+  </nav>
+  <div id="v"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+const K='deadline-radar-v1';
+let S={cap:4,tasks:[]},tab='home',cm=new Date();cm.setDate(1);
+try{const r=localStorage.getItem(K);if(r)S=JSON.parse(r)}catch(e){}
+let DB=null,UID=null,saveT,failed=false;
+const sync=()=>{const e=$('#st');if(e)e.textContent=DB?(failed?'Saved on this device (cloud sync failed)':'Synced to your account'):'Saved on this device'};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}
+  if(DB&&UID){clearTimeout(saveT);saveT=setTimeout(()=>DB.doc('data/users/'+UID+'/planner').set(JSON.parse(JSON.stringify(S))).then(()=>{failed=false;sync()}).catch(()=>{failed=true;sync()}),400)}};
+(async()=>{try{const u=await claude.use('user'),db=await claude.use('db');if(!u||!db)return;UID=await u.id();if(!UID)return;DB=db;
+  const s=await db.doc('data/users/'+UID+'/planner').get();
+  if(s.exists)S=Object.assign({cap:4,tasks:[]},s.data());else save();
+  watch();render()}catch(e){DB=null;sync()}})();
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const P=s=>{const[a,b,c]=s.split('-');return new Date(+a,b-1,+c)};
+const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+const add=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const diff=(a,b)=>Math.round((b-a)/864e5);
+const fmt=(d,o)=>d.toLocaleDateString('en-IN',o||{weekday:'short',day:'numeric',month:'short'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const TW={'Assignment':1,'Internal test':1.5,'Lab submission':1.1,'Registration':.6};
+const CL={'Assignment':'#3b3bd6','Internal test':'#d6336c','Lab submission':'#1f8a5b','Registration':'#b97a00'};
+const open=()=>S.tasks.filter(t=>!t.done);
+
+/* Priority engine: heavier, closer, more important work scores higher */
+const left=t=>Math.max(t.hours-(t.spent||0),0);
+const score=t=>TW[t.type]*(left(t)+2)/(Math.max(diff(today(),P(t.due)),0)+1);
+const level=t=>{const s=score(t);return s>=1.2?'High':s>=.5?'Medium':'Low'};
+
+/* Scheduler: earliest-deadline-first, fills each day up to your capacity */
+function plan(){
+  const t0=today(),cap=S.cap,use={[iso(t0)]:(S.logd||{})[iso(t0)]||0},sched={},late=[];
+  open().sort((a,b)=>a.due.localeCompare(b.due)||score(b)-score(a)).forEach(t=>{
+    let rem=left(t);const n=Math.max(diff(t0,P(t.due)),0);
+    for(let i=0;i<=n&&rem>0;i++){
+      const k=iso(add(t0,i)),free=cap-(use[k]||0);
+      if(free<=0)continue;
+      const h=Math.min(free,rem);use[k]=(use[k]||0)+h;
+      (sched[k]=sched[k]||[]).push({t,h});rem-=h;
+    }
+    if(rem>0)late.push({t,short:rem});
+  });
+  return{use,sched,late};
+}
+
+/* Conflict detection: 3+ deadlines on one day, or more hours due than you can give */
+function conflicts(pl){
+  const g={},start={},days={};
+  open().forEach(t=>(g[t.due]=g[t.due]||[]).push(t));
+  Object.keys(pl.sched).sort().forEach(k=>pl.sched[k].forEach(x=>{start[x.t.id]=start[x.t.id]||k;days[x.t.id]=(days[x.t.id]||0)+1}));
+  return Object.keys(g).sort().map(k=>({k,ts:g[k],hrs:g[k].reduce((s,t)=>s+left(t),0),start,days}))
+    .filter(c=>c.ts.length>=3||c.hrs>S.cap);
+}
+
+function heat(map){
+  const t0=today();let h='<div class="hm">';
+  for(let i=0;i<14;i++){
+    const d=add(t0,i),v=map[iso(d)]||0,r=v/S.cap;
+    const bg=v===0?'transparent':r>1?`rgba(214,51,108,${Math.min(.3+.3*(r-1),.85)})`:`rgba(92,92,230,${.12+r*.55})`;
+    h+=`<div style="background:${bg}"><small>${fmt(d,{weekday:'narrow'})}</small><br><b>${d.getDate()}</b><br>${v?(+v.toFixed(1))+'h':'–'}</div>`;
+  }
+  return h+'</div>';
+}
+
+function home(){
+  const pl=plan(),cf=conflicts(pl),o=open().sort((a,b)=>a.due.localeCompare(b.due));
+  const naive={};o.forEach(t=>naive[t.due]=(naive[t.due]||0)+left(t));
+  let h='';
+  if(!o.length)return `<div class="card"><h2>Nothing planned yet</h2><p class="mu">Add your assignments, tests, labs and registrations, or load a sample semester to see the planner work.</p><button class="go" onclick="sample()">Load sample semester</button></div>`;
+  const td=pl.sched[iso(today())]||[];
+  h+=`<div class="card"><h2>Today’s focus</h2>${td.length?td.map(x=>`<div class="t"><div class="m"><b>${esc(x.t.title)}</b><br><span class="mu">${+x.h.toFixed(1)}h planned, due ${fmt(P(x.t.due))}</span></div><button class="go alt" onclick="log(${x.t.id},${x.h})">Done ${+x.h.toFixed(1)}h</button></div>`).join(''):'<p class="mu">Nothing planned for today. You’re ahead.</p>'}</div>`;
+  h+=`<p class="mu">${o.length} open tasks. Next deadline: ${esc(o[0].title)} on ${fmt(P(o[0].due))}.</p>`;
+  if(!cf.length&&!pl.late.length)h+=`<div class="card"><h3>No workload conflicts</h3><p class="mu">Every deadline fits inside your ${S.cap}h daily limit.</p></div>`;
+  cf.forEach(c=>{
+    h+=`<div class="card bad"><h3>${c.ts.length} deadlines on ${fmt(P(c.k),{weekday:'long',day:'numeric',month:'short'})}</h3><p class="mu">${c.hrs}h of work due that day, but you can give ${S.cap}h. Suggested alternate plan:</p>`;
+    h+=c.ts.map(t=>{const s=c.start[t.id];return `<div>• <b>${esc(t.title)}</b>: start ${s?fmt(P(s)):'today'}, ${+left(t).toFixed(1)}h over ${c.days[t.id]||1} day${(c.days[t.id]||1)>1?'s':''}</div>`}).join('')+'</div>';
+  });
+  pl.late.forEach(l=>{h+=`<div class="card bad"><h3>Can’t fit ${esc(l.t.title)}</h3><p class="mu">You’re short by ${+l.short.toFixed(1)}h before ${fmt(P(l.t.due))}. Raise your daily hours, shrink the task, or ask for an extension.</p></div>`});
+  h+=`<div class="card"><h2>Workload, next 14 days</h2><p class="mu"><b>If you leave it late</b> (all hours on the due date)</p>${heat(naive)}<p class="mu"><b>Balanced plan</b> (spread across free days)</p>${heat(pl.use)}
+  <label class="mu">Study hours per day: <b id="cv">${S.cap}</b></label><br><input type="range" min="1" max="10" step="0.5" value="${S.cap}" style="width:100%" oninput="$('#cv').textContent=this.value" onchange="S.cap=+this.value;save();render()"></div>`;
+  return h;
+}
+
+function tasksV(){
+  const list=S.tasks.slice().sort((a,b)=>(a.done-b.done)||score(b)-score(a));
+  return `<div class="card"><h2>Add a task</h2><div class="row">
+  <input class="full" id="ti" placeholder="e.g. DBMS assignment 3" aria-label="Task name">
+  <select id="ty" aria-label="Type">${Object.keys(TW).map(k=>`<option>${k}</option>`).join('')}</select>
+  <input id="du" type="date" aria-label="Due date" value="${iso(add(today(),3))}">
+  <input id="hr" type="number" min="0.5" step="0.5" value="2" aria-label="Hours needed">
+  <button class="go" onclick="addT()">Add task</button></div><p class="mu" id="er"></p></div>
+  <div class="card"><h2>Priority order</h2>${list.length?list.map(t=>{const od=!t.done&&P(t.due)<today();return `<div class="t${t.done?' dn':''}"><input type="checkbox" ${t.done?'checked':''} onchange="tog(${t.id})" aria-label="Mark done"><div class="m"><b>${esc(t.title)}</b><br><span class="mu">${t.type}, ${+(t.spent||0).toFixed(1)}/${t.hours}h done, due ${fmt(P(t.due))}${od?' (overdue)':''}</span></div>${t.done?'':`<button class="go alt" style="padding:3px 8px" onclick="log(${t.id},${Math.min(1,left(t))})">+1h</button><span class="tag ${level(t)}">${level(t)}</span>`}<button class="x" onclick="del(${t.id})" aria-label="Delete">×</button></div>`}).join(''):'<p class="mu">No tasks yet.</p>'}
+  <div style="margin-top:10px;display:flex;gap:8px"><button class="go alt" onclick="sample()">Load sample</button><button class="go alt" onclick="ics()">Export .ics</button><button class="go alt" onclick="clr(this)">Clear all</button></div></div>`;
+}
+
+function cal(){
+  const y=cm.getFullYear(),m=cm.getMonth(),off=(new Date(y,m,1).getDay()+6)%7,dim=new Date(y,m+1,0).getDate(),by={};
+  open().forEach(t=>(by[t.due]=by[t.due]||[]).push(t));
+  let c=['M','T','W','T','F','S','S'].map(d=>`<div class="w">${d}</div>`).join('');
+  for(let i=0;i<off;i++)c+='<i></i>';
+  for(let d=1;d<=dim;d++){
+    const k=iso(new Date(y,m,d)),a=by[k]||[];
+    c+=`<div class="day${a.length>=3?' hot':''}${k===iso(today())?' now':''}"><b>${d}</b>${a.slice(0,2).map(t=>`<span class="ch" style="background:${CL[t.type]}">${esc(t.title)}</span>`).join('')}${a.length>2?`<span>+${a.length-2} more</span>`:''}</div>`;
+  }
+  return `<div class="card"><div class="mon"><button class="go alt" onclick="mv(-1)" aria-label="Previous month">‹</button><h2 style="margin:0">${cm.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h2><button class="go alt" onclick="mv(1)" aria-label="Next month">›</button></div><div class="cal">${c}</div><p class="mu">Pink days have three or more deadlines.</p></div>`;
+}
+
+function planV(){
+  const pl=plan(),t0=today();let h='<div class="card"><h2>Your study schedule</h2>';
+  let any=false;
+  for(let i=0;i<14;i++){
+    const d=add(t0,i),it=pl.sched[iso(d)];if(!it)continue;any=true;
+    h+=`<div class="t"><div style="width:70px"><b>${fmt(d)}</b></div><div class="m">${it.map(x=>`<div><span class="ch" style="display:inline-block;background:${CL[x.t.type]}">${x.h}h</span> ${esc(x.t.title)}</div>`).join('')}</div></div>`;
+  }
+  return h+(any?'':'<p class="mu">Add tasks to generate a schedule.</p>')+'</div>';
+}
+
+function addT(){
+  const ti=$('#ti').value.trim(),du=$('#du').value,hr=+$('#hr').value;
+  if(!ti||!du||!(hr>0)){$('#er').textContent='Enter a name, a due date and hours above 0.';return}
+  S.tasks.push({id:Date.now(),title:ti,type:$('#ty').value,due:du,hours:hr,done:false});save();render();
+}
+const tog=id=>{const t=S.tasks.find(x=>x.id===id);t.done=!t.done;save();render()};
+const del=id=>{S.tasks=S.tasks.filter(x=>x.id!==id);save();render()};
+const mv=n=>{cm.setMonth(cm.getMonth()+n);render()};
+function sample(){
+  const T=(n,ty,o,h,i)=>({id:Date.now()+i,title:n,type:ty,due:iso(add(today(),o)),hours:h,done:false});
+  S.tasks=[T('DBMS assignment','Assignment',3,5,1),T('OS lab record','Lab submission',3,3,2),T('Maths internal test','Internal test',3,6,3),T('DSA lab submission','Lab submission',6,3,4),T('Semester registration','Registration',9,1,5),T('CN assignment','Assignment',10,4,6),T('Physics internal test','Internal test',12,5,7)];
+  save();tab='home';render();
+}
+/* Class sharing: shared deadlines live in the database under the class code */
+let shared=[],unsub=null;
+const cpath=()=>'classes/'+S.cls+'/items';
+function watch(){
+  if(unsub){unsub();unsub=null}
+  shared=[];if(!DB||!S.cls)return;
+  try{unsub=DB.collection(cpath()).onSnapshot(s=>{
+    shared=s.docs.map(d=>Object.assign({},d.data(),{id:d.id})).filter(x=>/^[\w-]+$/.test(x.id)&&/^\d{4}-\d\d-\d\d$/.test(x.due)&&x.title).sort((a,b)=>a.due.localeCompare(b.due));
+    if(tab==='cls')render()},()=>{})}catch(e){}
+}
+function clsV(){
+  if(!DB)return `<div class="card"><h2>Class deadlines</h2><p class="mu">Class sharing needs the cloud backend, which is not connected in this version. Your personal planner works without it.</p></div>`;
+  if(!S.cls)return `<div class="card"><h2>Join your class</h2><p class="mu">Everyone who enters the same class code sees the same shared deadlines.</p><div class="row"><input class="full" id="cc" placeholder="e.g. CSE3A" maxlength="20" aria-label="Class code"><button class="go" onclick="joinC()">Join class</button></div></div>`;
+  const mine=new Set(S.tasks.map(t=>t.sid).filter(Boolean));
+  return `<div class="card"><h2>Class ${esc(S.cls)}</h2><p class="mu">Add a deadline once and everyone in the class can copy it into their own plan.</p>
+  <div class="row"><input class="full" id="ci" placeholder="Shared deadline, e.g. DBMS assignment 3" aria-label="Name"><select id="ct" aria-label="Type">${Object.keys(TW).map(k=>`<option>${k}</option>`).join('')}</select><input id="cd" type="date" aria-label="Due date" value="${iso(add(today(),3))}"><input id="ch" type="number" min="0.5" step="0.5" value="3" aria-label="Hours"><button class="go" onclick="shareT()">Share with class</button></div><p class="mu" id="ce"></p><button class="go alt" onclick="leaveC()">Leave class</button></div>
+  <div class="card"><h2>Shared deadlines</h2>${shared.length?shared.map(x=>{const dc=shared.filter(y=>y.due===x.due).length;return `<div class="t"><div class="m"><b>${esc(x.title)}</b><br><span class="mu">${esc(x.type||'Assignment')}, ${+x.hours||1}h, due ${fmt(P(x.due))}${dc>=3?' (crunch day)':''}</span></div>${mine.has(x.id)?'<span class="tag">In your plan</span>':`<button class="go alt" style="padding:3px 8px" onclick="addMine('${x.id}')">Add to plan</button>`}${x.by===UID?`<button class="x" onclick="delS('${x.id}')" aria-label="Delete">×</button>`:''}</div>`}).join(''):'<p class="mu">Nothing shared yet. Add the first deadline above.</p>'}</div>`;
+}
+function joinC(){const c=$('#cc').value.toUpperCase().replace(/[^A-Z0-9_-]/g,'');if(!c)return;S.cls=c;save();watch();render()}
+function leaveC(){S.cls='';if(unsub){unsub();unsub=null}shared=[];save();render()}
+function shareT(){
+  const ti=$('#ci').value.trim(),du=$('#cd').value,hr=+$('#ch').value,e=$('#ce');
+  if(!ti||!du||!(hr>0)){e.textContent='Enter a name, a due date and hours above 0.';return}
+  const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  DB.doc(cpath()+'/'+id).set({title:ti.slice(0,80),type:$('#ct').value,due:du,hours:hr,by:UID,at:Date.now()}).then(()=>{$('#ci').value='';e.textContent='Shared.'}).catch(()=>{e.textContent='Could not share. Your account may only have view access.'});
+}
+function addMine(id){const x=shared.find(s=>s.id===id);if(!x)return;S.tasks.push({id:Date.now(),sid:x.id,title:x.title,type:TW[x.type]?x.type:'Assignment',due:x.due,hours:+x.hours||1,done:false});save();render()}
+function delS(id){DB.doc(cpath()+'/'+id).delete().catch(()=>{})}
+const go=t=>{tab=t;render()};
+function log(id,h){const t=S.tasks.find(x=>x.id===id);if(!t)return;t.spent=Math.min((t.spent||0)+h,t.hours);S.logd=S.logd||{};const k=iso(today());S.logd[k]=(S.logd[k]||0)+h;if(t.spent>=t.hours)t.done=true;save();render()}
+let armed=false;
+function clr(b){if(!armed){armed=true;b.textContent='Tap again to clear';setTimeout(()=>{armed=false;b.textContent='Clear all'},3000);return}armed=false;S.tasks=[];S.logd={};save();render()}
+async function ics(){
+  const n=iso(today()).replace(/-/g,'')+'T000000Z';
+  const ev=open().map(t=>`BEGIN:VEVENT\r\nUID:${t.id}@semsort\r\nDTSTAMP:${n}\r\nDTSTART;VALUE=DATE:${t.due.replace(/-/g,'')}\r\nSUMMARY:${t.type}: ${t.title.replace(/[,;\n]/g,' ')}\r\nEND:VEVENT`).join('\r\n');
+  const data=`BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SemSort//EN\r\n${ev}\r\nEND:VCALENDAR`;
+  try{const d=await claude.use('downloads');if(!d)throw {code:'unavailable'};await d.save({filename:'semsort-deadlines.ics',data})}
+  catch(e){const s=$('#st');if(s)s.textContent='Export failed: '+((e&&e.code)||'unavailable')}
+}
+function render(){
+  $('#v').innerHTML={home:home,tasks:tasksV,cal:cal,plan:planV,cls:clsV}[tab]();
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+  sync();
+}
+render();
+</script>
+</body>
+</html>
