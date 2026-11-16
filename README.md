@@ -1,7 +1,5 @@
 # SemSort
 
-Built by Team Stalwarts Coder: Namita Tiwari and Karan Upadhyay.
-
 Sort your semester around real workload, not just due dates.
 
 Students' assignments, internal tests, lab submissions and registrations have deadlines in different places, so conflicts only show up at the last moment. SemSort combines deadlines, workload and available study time into a realistic schedule.
